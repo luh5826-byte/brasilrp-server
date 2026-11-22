@@ -1,0 +1,15 @@
+{
+  "name": "brasilrp-server",
+  "version": "1.0.0",
+  "description": "Servidor Multiplayer RP (Posicao, Chat RP e Sinalizacao de Voz WebRTC) para Brasil RP GTA 6",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
