@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brasil RP • Painel de Estatísticas & Servidor</title>
+  <style>
+    :root {
+      --bg: #070a12;
+      --card: #0f1524;
+      --card-2: #141c30;
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #eef2ff;
+      --muted: #8b98b8;
+      --cyan: #00e5ff;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --purple: #a855f7;
+      --red: #ef4444;
+      --pink: #ec4899;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: radial-gradient(circle at top right, #111c38 0%, var(--bg) 52%);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.45;
+    }
+    button, input { font-family: inherit; }
+
+    /* LOGIN */
+    .login-wrap {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .login-card {
+      width: 100%;
+      max-width: 390px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px 24px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    }
+    .brand-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      background: rgba(0, 229, 255, 0.12);
+      border: 1px solid rgba(0, 229, 255, 0.35);
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      margin-bottom: 14px;
+    }
+    .login-card h1 { font-size: 22px; margin-bottom: 6px; }
+    .login-card p { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+    .input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #0a0f1c;
+      color: var(--text);
+      font-size: 15px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .input:focus { border-color: var(--cyan); }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 11px 16px;
+      border-radius: 12px;
+      border: none;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      transition: transform .12s, opacity .15s;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary {
+      background: linear-gradient(135deg, #00e5ff, #2563eb);
+      color: #04101f;
+    }
+    .btn-secondary {
+      background: var(--card-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.16);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.35);
+    }
+    .btn-sm { padding: 6px 10px; font-size: 12px; border-radius: 8px; }
+    .login-err { color: #f87171; font-size: 13px; margin-top: 10px; min-height: 18px; }
+
+    /* APP SHELL */
+    .hidden { display: none !important; }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: blur(12px);
+      background: rgba(7, 10, 18, 0.85);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .top-left { display: flex; align-items: center; gap: 12px; }
+    .logo-dot {
+      width: 11px; height: 11px; border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 12px var(--green);
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+    .top-title { font-weight: 800; font-size: 16px; }
+    .top-sub { font-size: 12px; color: var(--muted); }
+    .top-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    .container { max-width: 1240px; margin: 0 auto; padding: 18px 16px 40px; }
+
+    /* TABS */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+      margin-bottom: 18px;
+      scrollbar-width: none;
+    }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      padding: 9px 15px;
+      border-radius: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tab-btn.active {
+      background: rgba(0, 229, 255, 0.14);
+      border-color: rgba(0, 229, 255, 0.45);
+      color: var(--cyan);
+    }
+
+    /* GRID & CARDS */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .kpi {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 15px 16px;
+      position: relative;
+      overflow: hidden;
+    }
+    .kpi-label { font-size: 12px; color: var(--muted); font-weight: 600; }
+    .kpi-val { font-size: 28px; font-weight: 800; margin: 4px 0 2px; }
+    .kpi-sub { font-size: 12px; color: var(--muted); }
+    .kpi.c-green .kpi-val { color: var(--green); }
+    .kpi.c-cyan .kpi-val { color: var(--cyan); }
+    .kpi.c-amber .kpi-val { color: var(--amber); }
+    .kpi.c-purple .kpi-val { color: var(--purple); }
+    .kpi.c-pink .kpi-val { color: var(--pink); }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .card-title { font-size: 15px; font-weight: 800; }
+    .card-sub { font-size: 12px; color: var(--muted); }
+
+    /* BAR CHART */
+    .chart-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      height: 150px;
+      padding-top: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .bar-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100%;
+      justify-content: flex-end;
+      min-width: 0;
+    }
+    .bar-stack {
+      width: 100%;
+      max-width: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      gap: 2px;
+      height: 100%;
+    }
+    .bar-fill {
+      width: 100%;
+      border-radius: 4px 4px 0 0;
+      min-height: 2px;
+      transition: height .3s;
+    }
+    .bar-web { background: linear-gradient(180deg, #00e5ff, #0284c7); }
+    .bar-dl { background: linear-gradient(180deg, #22c55e, #15803d); }
+    .bar-lbl {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-top: 10px; flex-wrap: wrap; }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .dot-sq { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+    /* PROGRESS LIST */
+    .prog-item { margin-bottom: 10px; }
+    .prog-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+    .prog-track { height: 7px; background: #0a0f1c; border-radius: 99px; overflow: hidden; }
+    .prog-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--cyan), var(--purple)); }
+
+    /* TABLES */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 10px 10px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .pill-green { background: rgba(34, 197, 94, 0.16); color: #86efac; }
+    .pill-cyan { background: rgba(0, 229, 255, 0.15); color: var(--cyan); }
+    .pill-amber { background: rgba(245, 158, 11, 0.16); color: #fcd34d; }
+    .pill-purple { background: rgba(168, 85, 247, 0.16); color: #d8b4fe; }
+
+    /* RADAR */
+    .radar-wrap { display: flex; justify-content: center; align-items: center; }
+    #radarCanvas {
+      width: 100%;
+      max-width: 420px;
+      aspect-ratio: 1 / 1;
+      background: #060a14;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+
+    /* FEED */
+    .feed-list { max-height: 360px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+    .feed-item {
+      background: var(--card-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .feed-time { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+    .announce-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .announce-row .input { flex: 1; min-width: 200px; }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #111b33;
+      border: 1px solid var(--cyan);
+      color: var(--text);
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s;
+      z-index: 99;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+  <!-- TELA DE LOGIN -->
+  <div id="loginView" class="login-wrap">
+    <form id="loginForm" class="login-card">
+      <div class="brand-badge">🇧🇷 BRASIL RP • ADMIN</div>
+      <h1>Painel do Servidor</h1>
+      <p>Acesse estatísticas do jogo, jogadores online, acessos da página web e logs em tempo real.</p>
+      <input id="pwdInput" class="input" type="password" placeholder="Senha de administrador" autocomplete="current-password" required />
+      <button type="submit" class="btn btn-primary" style="width:100%;margin-top:12px;">Entrar no Painel</button>
+      <div id="loginErr" class="login-err"></div>
+    </form>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="appView" class="hidden">
+    <header class="topbar">
+      <div class="top-left">
+        <div class="logo-dot" id="liveDot"></div>
+        <div>
+          <div class="top-title">Brasil RP • Central de Estatísticas</div>
+          <div class="top-sub" id="serverMeta">Conectando...</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button class="btn btn-secondary btn-sm" id="btnToggleAuto">⏸ Pausar Auto</button>
+        <button class="btn btn-secondary btn-sm" id="btnRefresh">🔄 Atualizar</button>
+        <button class="btn btn-secondary btn-sm" id="btnExport">📥 Exportar JSON</button>
+        <button class="btn btn-danger btn-sm" id="btnLogout">Sair</button>
+      </div>
+    </header>
+
+    <main class="container">
+      <nav class="tabs">
+        <button class="tab-btn active" data-tab="overview">📊 Visão Geral</button>
+        <button class="tab-btn" data-tab="online">🟢 Online Agora (<span id="tabOnlineCnt">0</span>)</button>
+        <button class="tab-btn" data-tab="users">👥 Usuários (<span id="tabUsersCnt">0</span>)</button>
+        <button class="tab-btn" data-tab="web">🌐 Acessos Web</button>
+        <button class="tab-btn" data-tab="logs">💬 Chat &amp; Logs</button>
+      </nav>
+
+      <!-- TAB 1: VISÃO GERAL -->
+      <section id="tab-overview" class="tab-panel">
+        <div class="kpi-grid">
+          <div class="kpi c-green">
+            <div class="kpi-label">Online Agora</div>
+            <div class="kpi-val" id="kOnline">0</div>
+            <div class="kpi-sub" id="kOnlineSub">Pico: 0</div>
+          </div>
+          <div class="kpi c-cyan">
+            <div class="kpi-label">Visitas no Site</div>
+            <div class="kpi-val" id="kViews">0</div>
+            <div class="kpi-sub" id="kViewsSub">Hoje: 0 • Únicos: 0</div>
+          </div>
+          <div class="kpi c-amber">
+            <div class="kpi-label">Downloads do APK</div>
+            <div class="kpi-val" id="kDownloads">0</div>
+            <div class="kpi-sub" id="kDownloadsSub">Hoje: 0 • Conv: 0%</div>
+          </div>
+          <div class="kpi c-purple">
+            <div class="kpi-label">Jogadores Únicos</div>
+            <div class="kpi-val" id="kUsers">0</div>
+            <div class="kpi-sub" id="kUsersSub">Sessões: 0</div>
+          </div>
+          <div class="kpi c-pink">
+            <div class="kpi-label">Mensagens Chat RP</div>
+            <div class="kpi-val" id="kChats">0</div>
+            <div class="kpi-sub" id="kSharesSub">Compartilhamentos: 0</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Servidor</div>
+            <div class="kpi-val" id="kUptime" style="font-size:22px;">0m</div>
+            <div class="kpi-sub" id="kMem">RAM: 0 MB</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">📢 Enviar Aviso Global no Jogo</div>
+              <div class="card-sub">Aparece imediatamente no chat de todos os jogadores online</div>
+            </div>
+          </div>
+          <div class="announce-row">
+            <input id="announceInput" class="input" type="text" maxlength="180" placeholder="Ex: Nova atualização disponível! Bom RP a todos!" />
+            <button id="btnAnnounce" class="btn btn-primary">Enviar para o Jogo</button>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card" style="margin-bottom:0">
+            <div class="card-head">
+              <div class="card-title">Acessos &amp; Downloads (Últimas 24h)</div>
+              <div class="card-sub">Horário BRT</div>
+            </div>
+            <div class="chart-bars" id="hourlyChart"></div>
+            <div class="legend">
+              <span><i class="dot-sq" style="background:#00e5ff"></i> Visitas Web</span>
+              <span><i class="dot-sq" style="background:#22c55e"></i> Downloads APK</span>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:0">
+            <div class="card-head">
+              <div class="card-title">Últimos 14 Dias</div>
+              <div class="card-sub">Visitas &amp; Downloads</div>
+            </div>
+            <div class="chart-bars" id="dailyChart"></div>
+            <div class="legend">
+              <span><i class="dot-sq" style="background:#00e5ff"></i> Visitas</span>
+              <span><i class="dot-sq" style="background:#22c55e"></i> Downloads</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card" style="margin-bottom:0">
+            <div class="card-head"><div class="card-title">📱 Dispositivos</div></div>
+            <div id="devicesList"></div>
+          </div>
+          <div class="card" style="margin-bottom:0">
+            <div class="card-head"><div class="card-title">🔗 Origens de Acesso (Referrers)</div></div>
+            <div id="referrersList"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: ONLINE AGORA -->
+      <section id="tab-online" class="tab-panel hidden">
+        <div class="grid-2">
+          <div class="card" style="margin-bottom:0">
+            <div class="card-head">
+              <div>
+                <div class="card-title">🗺️ Radar Ao Vivo da Cidade</div>
+                <div class="card-sub">Posição (X, Z) dos jogadores conectados</div>
+              </div>
+            </div>
+            <div class="radar-wrap">
+              <canvas id="radarCanvas" width="420" height="420"></canvas>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:0">
+            <div class="card-head">
+              <div class="card-title">🟢 Jogadores Conectados</div>
+              <div class="card-sub" id="onlineCapacity">0 / 64</div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Jogador</th>
+                    <th>Estado</th>
+                    <th>Vel.</th>
+                    <th>Tempo</th>
+                    <th>Dispositivo</th>
+                    <th>Ação</th>
+                  </tr>
+                </thead>
+                <tbody id="onlineTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: USUÁRIOS -->
+      <section id="tab-users" class="tab-panel hidden">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">👥 Histórico de Jogadores</div>
+              <div class="card-sub">Todos os usuários únicos que já entraram no Brasil RP</div>
+            </div>
+            <input id="userSearch" class="input" style="max-width:260px;padding:8px 12px;font-size:13px;" placeholder="Buscar jogador ou dispositivo..." />
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Jogador</th>
+                  <th>Sessões</th>
+                  <th>Tempo Jogado</th>
+                  <th>Vel. Máx</th>
+                  <th>Msgs</th>
+                  <th>Versão</th>
+                  <th>Dispositivo</th>
+                  <th>Último Acesso</th>
+                </tr>
+              </thead>
+              <tbody id="usersTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: ACESSOS WEB -->
+      <section id="tab-web" class="tab-panel hidden">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">🌐 Visitantes Recentes da Página Web</div>
+              <div class="card-sub">Rastreamento em tempo real do site de download</div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID Visitante</th>
+                  <th>Dispositivo / OS</th>
+                  <th>Navegador</th>
+                  <th>Origem</th>
+                  <th>Visitas</th>
+                  <th>Downloads</th>
+                  <th>IP</th>
+                  <th>Último Acesso</th>
+                </tr>
+              </thead>
+              <tbody id="visitorsTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: CHAT & LOGS -->
+      <section id="tab-logs" class="tab-panel hidden">
+        <div class="grid-2">
+          <div class="card" style="margin-bottom:0">
+            <div class="card-head"><div class="card-title">💬 Chat RP Recente</div></div>
+            <div class="feed-list" id="chatFeed"></div>
+          </div>
+          <div class="card" style="margin-bottom:0">
+            <div class="card-head">
+              <div class="card-title">⚡ Eventos em Tempo Real</div>
+              <button class="btn btn-danger btn-sm" id="btnResetStats">Zerar Dados</button>
+            </div>
+            <div class="feed-list" id="eventsFeed"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const TOKEN_KEY = 'brasilrp_admin_token';
+    let token = localStorage.getItem(TOKEN_KEY) || '';
+    let autoRefresh = true;
+    let timer = null;
+    let lastData = null;
+
+    const $ = (id) => document.getElementById(id);
+
+    function showToast(msg) {
+      const t = $('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2500);
+    }
+
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function fmtDur(sec) {
+      sec = Math.max(0, Math.floor(sec || 0));
+      const d = Math.floor(sec / 86400);
+      const h = Math.floor((sec % 86400) / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      if (d > 0) return `${d}d ${h}h`;
+      if (h > 0) return `${h}h ${m}m`;
+      if (m > 0) return `${m}m ${s}s`;
+      return `${s}s`;
+    }
+
+    function fmtTime(ts) {
+      if (!ts) return '-';
+      const d = new Date(ts);
+      return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    async function api(path, opts = {}) {
+      const headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      const res = await fetch(path, Object.assign({}, opts, { headers }));
+      if (res.status === 401) {
+        logoutLocal();
+        throw new Error('Sessão expirada');
+      }
+      return res.json();
+    }
+
+    function logoutLocal() {
+      token = '';
+      localStorage.removeItem(TOKEN_KEY);
+      clearInterval(timer);
+      $('appView').classList.add('hidden');
+      $('loginView').classList.remove('hidden');
+    }
+
+    // Login
+    $('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      $('loginErr').textContent = '';
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: $('pwdInput').value })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          $('loginErr').textContent = data.error || 'Senha inválida.';
+          return;
+        }
+        token = data.token;
+        localStorage.setItem(TOKEN_KEY, token);
+        $('pwdInput').value = '';
+        enterApp();
+      } catch (err) {
+        $('loginErr').textContent = 'Erro de conexão com o servidor.';
+      }
+    });
+
+    function enterApp() {
+      $('loginView').classList.add('hidden');
+      $('appView').classList.remove('hidden');
+      fetchStats();
+      clearInterval(timer);
+      timer = setInterval(() => { if (autoRefresh) fetchStats(); }, 3000);
+    }
+
+    // Tabs
+    document.querySelectorAll('.tab-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach((p) => p.classList.add('hidden'));
+        btn.classList.add('active');
+        $('tab-' + btn.dataset.tab).classList.remove('hidden');
+        if (btn.dataset.tab === 'online' && lastData) drawRadar(lastData.onlinePlayers || []);
+      });
+    });
+
+    $('btnToggleAuto').addEventListener('click', () => {
+      autoRefresh = !autoRefresh;
+      $('btnToggleAuto').textContent = autoRefresh ? '⏸ Pausar Auto' : '▶ Retomar Auto';
+      $('liveDot').style.background = autoRefresh ? 'var(--green)' : 'var(--amber)';
+    });
+
+    $('btnRefresh').addEventListener('click', () => { fetchStats(); showToast('Atualizado!'); });
+
+    $('btnExport').addEventListener('click', () => {
+      window.open('/api/admin/export?token=' + encodeURIComponent(token), '_blank');
+    });
+
+    $('btnLogout').addEventListener('click', async () => {
+      try { await api('/api/admin/logout', { method: 'POST' }); } catch (_) {}
+      logoutLocal();
+    });
+
+    $('btnAnnounce').addEventListener('click', async () => {
+      const text = $('announceInput').value.trim();
+      if (!text) return;
+      try {
+        const r = await api('/api/admin/announce', { method: 'POST', body: JSON.stringify({ text }) });
+        if (r.ok) {
+          $('announceInput').value = '';
+          showToast(`Aviso enviado para ${r.sentTo} jogador(es)!`);
+          fetchStats();
+        }
+      } catch (_) {}
+    });
+
+    $('btnResetStats').addEventListener('click', async () => {
+      if (!confirm('Tem certeza que deseja zerar todas as estatísticas e histórico?')) return;
+      try {
+        await api('/api/admin/reset-stats', { method: 'POST' });
+        showToast('Estatísticas zeradas.');
+        fetchStats();
+      } catch (_) {}
+    });
+
+    $('userSearch').addEventListener('input', () => {
+      if (lastData) renderUsers(lastData.users || []);
+    });
+
+    async function kickPlayer(id, name) {
+      if (!confirm(`Expulsar ${name} do servidor?`)) return;
+      try {
+        await api('/api/admin/kick', { method: 'POST', body: JSON.stringify({ id }) });
+        showToast(`${name} desconectado.`);
+        fetchStats();
+      } catch (_) {}
+    }
+    window.kickPlayer = kickPlayer;
+
+    function renderBarChart(containerId, items, labelKey) {
+      const el = $(containerId);
+      const maxVal = Math.max(1, ...items.map((i) => Math.max(i.pageViews || 0, i.downloads || 0)));
+      el.innerHTML = items.map((it) => {
+        const hWeb = Math.round(((it.pageViews || 0) / maxVal) * 110);
+        const hDl = Math.round(((it.downloads || 0) / maxVal) * 110);
+        return `
+          <div class="bar-col" title="${esc(it[labelKey])}: ${it.pageViews} visitas, ${it.downloads} downloads, pico ${it.peakOnline} online">
+            <div class="bar-stack">
+              ${it.downloads ? `<div class="bar-fill bar-dl" style="height:${Math.max(3, hDl)}px"></div>` : ''}
+              <div class="bar-fill bar-web" style="height:${Math.max(2, hWeb)}px"></div>
+            </div>
+            <div class="bar-lbl">${esc(it[labelKey])}</div>
+          </div>`;
+      }).join('');
+    }
+
+    function renderProgressMap(containerId, obj) {
+      const el = $(containerId);
+      const entries = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, 8);
+      if (!entries.length) {
+        el.innerHTML = '<div style="color:var(--muted);font-size:13px;">Sem dados ainda.</div>';
+        return;
+      }
+      const total = entries.reduce((s, e) => s + e[1], 0) || 1;
+      el.innerHTML = entries.map(([k, v]) => {
+        const pct = Math.round((v / total) * 100);
+        return `
+          <div class="prog-item">
+            <div class="prog-row"><span>${esc(k)}</span><span style="color:var(--muted)">${v} (${pct}%)</span></div>
+            <div class="prog-track"><div class="prog-fill" style="width:${pct}%"></div></div>
+          </div>`;
+      }).join('');
+    }
+
+    function drawRadar(list) {
+      const canvas = $('radarCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+
+      // Grade
+      ctx.strokeStyle = 'rgba(0, 229, 255, 0.12)';
+      ctx.lineWidth = 1;
+      for (let i = 1; i < 6; i++) {
+        const p = (W / 6) * i;
+        ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, H); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(W, p); ctx.stroke();
+      }
+      // Circulos concentricos
+      [70, 140, 195].forEach((r) => {
+        ctx.beginPath(); ctx.arc(W / 2, H / 2, r, 0, Math.PI * 2); ctx.stroke();
+      });
+
+      // Escala dinamica
+      let maxCoord = 250;
+      list.forEach((p) => {
+        maxCoord = Math.max(maxCoord, Math.abs(p.x || 0) + 40, Math.abs(p.z || 0) + 40);
+      });
+
+      list.forEach((p) => {
+        const rx = W / 2 + ((p.x || 0) / maxCoord) * (W * 0.44);
+        const ry = H / 2 + ((p.z || 0) / maxCoord) * (H * 0.44);
+        ctx.beginPath();
+        ctx.fillStyle = p.inCar ? '#f59e0b' : (p.speaking ? '#22c55e' : '#00e5ff');
+        ctx.arc(rx, ry, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#eef2ff';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText(p.name, rx + 9, ry + 4);
+      });
+
+      if (!list.length) {
+        ctx.fillStyle = '#8b98b8';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Nenhum jogador online no momento', W / 2, H / 2);
+        ctx.textAlign = 'left';
+      }
+    }
+
+    function renderUsers(users) {
+      const q = ($('userSearch').value || '').trim().toLowerCase();
+      const filtered = q
+        ? users.filter((u) => (u.name || '').toLowerCase().includes(q) || (u.lastDevice || '').toLowerCase().includes(q))
+        : users;
+      $('usersTbody').innerHTML = filtered.length
+        ? filtered.map((u) => `
+          <tr>
+            <td><b>${esc(u.name)}</b></td>
+            <td>${u.sessions || 0}</td>
+            <td>${fmtDur(u.totalPlaytimeSec)}</td>
+            <td>${u.maxSpeed || 0} km/h</td>
+            <td>${u.messagesSent || 0}</td>
+            <td><span class="pill pill-cyan">${esc(u.lastVersion || '-')} / OTA ${esc(u.lastOta || '-')}</span></td>
+            <td>${esc(u.lastDevice || '-')}</td>
+            <td style="color:var(--muted)">${fmtTime(u.lastSeen)}</td>
+          </tr>`).join('')
+        : '<tr><td colspan="8" style="color:var(--muted);text-align:center;">Nenhum jogador registrado ainda.</td></tr>';
+    }
+
+    function renderAll(d) {
+      lastData = d;
+      const s = d.summary;
+      const srv = d.server;
+
+      $('serverMeta').textContent = `Online • Uptime ${fmtDur(srv.uptimeSec)} • Atualizado ${new Date().toLocaleTimeString('pt-BR')}`;
+      $('tabOnlineCnt').textContent = s.playersOnline;
+      $('tabUsersCnt').textContent = s.totalUsers;
+
+      $('kOnline').textContent = s.playersOnline;
+      $('kOnlineSub').textContent = `Pico: ${s.peakOnline} • Hoje: ${s.todayPeakOnline}`;
+      $('kViews').textContent = s.totalPageViews;
+      $('kViewsSub').textContent = `Hoje: ${s.todayPageViews} • Únicos: ${s.totalUniqueVisitors}`;
+      const conv = s.totalPageViews ? Math.round((s.totalDownloads / s.totalPageViews) * 100) : 0;
+      $('kDownloads').textContent = s.totalDownloads;
+      $('kDownloadsSub').textContent = `Hoje: ${s.todayDownloads} • Conv: ${conv}%`;
+      $('kUsers').textContent = s.totalUsers;
+      $('kUsersSub').textContent = `Sessões: ${s.totalGameSessions} (Hoje: ${s.todayGameSessions})`;
+      $('kChats').textContent = s.totalChatMessages;
+      $('kSharesSub').textContent = `Compartilhamentos: ${s.totalShares}`;
+      $('kUptime').textContent = fmtDur(srv.uptimeSec);
+      $('kMem').textContent = `RAM: ${srv.memoryMb} MB • Cap: ${srv.maxPlayers}`;
+
+      renderBarChart('hourlyChart', d.hourlySeries || [], 'hour');
+      renderBarChart('dailyChart', d.dailySeries || [], 'day');
+      renderProgressMap('devicesList', d.devices);
+      renderProgressMap('referrersList', d.referrers);
+
+      // Online
+      $('onlineCapacity').textContent = `${s.playersOnline} / ${srv.maxPlayers}`;
+      const online = d.onlinePlayers || [];
+      $('onlineTbody').innerHTML = online.length
+        ? online.map((p) => `
+          <tr>
+            <td><b>${esc(p.name)}</b> <span style="color:var(--muted);font-size:11px">(${esc(p.id)})</span></td>
+            <td>
+              ${p.inCar ? '<span class="pill pill-amber">🏎️ Carro</span>' : '<span class="pill pill-cyan">🚶 A pé</span>'}
+              ${p.speaking ? '<span class="pill pill-green">🔊 Mic</span>' : ''}
+            </td>
+            <td>${p.speedKmh} km/h</td>
+            <td>${fmtDur(p.sessionSec)}</td>
+            <td>${esc(p.device)}</td>
+            <td><button class="btn btn-danger btn-sm" onclick="kickPlayer('${esc(p.id)}','${esc(p.name)}')">Kick</button></td>
+          </tr>`).join('')
+        : '<tr><td colspan="6" style="color:var(--muted);text-align:center;">Nenhum jogador online no momento.</td></tr>';
+      drawRadar(online);
+
+      // Users
+      renderUsers(d.users || []);
+
+      // Visitors
+      const visitors = d.visitors || [];
+      $('visitorsTbody').innerHTML = visitors.length
+        ? visitors.map((v) => `
+          <tr>
+            <td style="font-family:monospace;color:var(--cyan)">${esc(v.id.slice(0, 12))}</td>
+            <td>${esc(v.device)} <span style="color:var(--muted)">(${esc(v.os)})</span></td>
+            <td>${esc(v.browser)}</td>
+            <td><span class="pill pill-purple">${esc(v.referrer)}</span></td>
+            <td>${v.visits || 0}</td>
+            <td>${v.downloads || 0}</td>
+            <td style="color:var(--muted)">${esc(v.ip)}</td>
+            <td style="color:var(--muted)">${fmtTime(v.lastSeen)}</td>
+          </tr>`).join('')
+        : '<tr><td colspan="8" style="color:var(--muted);text-align:center;">Nenhuma visita registrada ainda.</td></tr>';
+
+      // Chats
+      const chats = d.recentChats || [];
+      $('chatFeed').innerHTML = chats.length
+        ? chats.map((c) => `
+          <div class="feed-item">
+            <div><b>${esc(c.name)}:</b> ${esc(c.text)}</div>
+            <div class="feed-time">${fmtTime(c.ts)}</div>
+          </div>`).join('')
+        : '<div style="color:var(--muted);font-size:13px;">Nenhuma mensagem no chat ainda.</div>';
+
+      // Events
+      const events = d.recentEvents || [];
+      const iconMap = { web: '🌐', download: '📥', share: '📤', join: '🟢', leave: '🔴', game: '🎮', admin: '🛡️' };
+      $('eventsFeed').innerHTML = events.length
+        ? events.map((ev) => `
+          <div class="feed-item">
+            <div>
+              <b>${iconMap[ev.type] || '•'} ${esc(ev.label)}</b>
+              <div style="font-size:12px;color:var(--muted)">${esc(ev.detail)} ${ev.ip && ev.ip !== '-' ? '• ' + esc(ev.ip) : ''}</div>
+            </div>
+            <div class="feed-time">${fmtTime(ev.ts)}</div>
+          </div>`).join('')
+        : '<div style="color:var(--muted);font-size:13px;">Sem eventos recentes.</div>';
+    }
+
+    async function fetchStats() {
+      try {
+        const data = await api('/api/admin/stats');
+        renderAll(data);
+      } catch (err) {
+        $('serverMeta').textContent = 'Reconectando ao servidor...';
+      }
+    }
+
+    if (token) enterApp();
+  </script>
+</body>
+</html>
