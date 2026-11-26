@@ -10,6 +10,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'brasilrp2026';
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const STATS_FILE = path.join(DATA_DIR, 'stats.json');
 const ADMIN_HTML_FILE = path.join(__dirname, 'admin.html');
+const REC_ADMIN_HTML_FILE = path.join(__dirname, 'rec_admin.html');
 
 // Sessoes de admin em memoria: token -> expiresAt
 const adminSessions = new Map();
@@ -17,7 +18,25 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
 // Jogadores conectados via WebSocket: id -> playerObj
 const players = new Map();
+// Jogadores online no jogo REC PT-BR (via heartbeat HTTP): deviceId -> recPlayerObj
+const recOnline = new Map();
+const REC_ONLINE_TTL_MS = 75 * 1000;
 let nextId = 1;
+
+function createDefaultRecStore() {
+  return {
+    totals: {
+      sessions: 0,
+      peakOnline: 0,
+      peakOnlineAt: null,
+      otaUpdates: 0,
+      telegramClicks: 0
+    },
+    users: {},
+    daily: {},
+    recentEvents: []
+  };
+}
 
 // Estado persistente de analytics e usuarios
 function createDefaultStore() {
@@ -39,7 +58,8 @@ function createDefaultStore() {
     referrers: {},      // host -> count
     devices: {},        // OS -> count
     recentChats: [],    // [{ ts, from, name, text, scope }]
-    recentEvents: []    // [{ ts, type, label, detail, ip }]
+    recentEvents: [],   // [{ ts, type, label, detail, ip }]
+    rec: createDefaultRecStore()
   };
 }
 
@@ -53,6 +73,8 @@ function loadStore() {
       const parsed = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'));
       store = Object.assign(createDefaultStore(), parsed);
       store.totals = Object.assign(createDefaultStore().totals, parsed.totals || {});
+      store.rec = Object.assign(createDefaultRecStore(), parsed.rec || {});
+      store.rec.totals = Object.assign(createDefaultRecStore().totals, (parsed.rec && parsed.rec.totals) || {});
       console.log('[BrasilRP Server] Estatisticas carregadas de', STATS_FILE);
     }
   } catch (err) {
@@ -595,6 +617,117 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 2B. Telemetria & Heartbeat em tempo real do jogo REC PT-BR
+  if (pathname === '/api/rec/heartbeat' && req.method === 'POST') {
+    const body = await readJsonBody(req);
+    const now = Date.now();
+    const ip = getClientIp(req);
+    const deviceId = String(body.deviceId || '').trim().slice(0, 64) ||
+      ('rec_' + crypto.createHash('sha1').update(ip + '|' + String(body.device || '')).digest('hex').slice(0, 12));
+    const device = String(body.device || 'Android').slice(0, 48);
+    const osName = String(body.os || 'Android').slice(0, 24);
+    const locale = String(body.locale || 'pt_BR').slice(0, 16);
+    const appVersion = String(body.appVersion || '0.6.0.1.1').slice(0, 24);
+    const patchVersion = parseInt(body.patchVersion || '1', 10) || 1;
+    const ev = String(body.event || 'heartbeat').slice(0, 32);
+
+    if (!store.rec) store.rec = createDefaultRecStore();
+    const rec = store.rec;
+    const dKey = dayKey(now);
+    if (!rec.daily[dKey]) {
+      rec.daily[dKey] = { sessions: 0, uniqueUsers: [], peakOnline: 0, otaUpdates: 0 };
+    }
+    const dayBucket = rec.daily[dKey];
+
+    let onlineEntry = recOnline.get(deviceId);
+    if (!onlineEntry) {
+      onlineEntry = {
+        deviceId,
+        device,
+        os: osName,
+        locale,
+        appVersion,
+        patchVersion,
+        ip: maskIp(ip),
+        firstConnectedAt: now,
+        lastPingAt: now
+      };
+      recOnline.set(deviceId, onlineEntry);
+    } else {
+      onlineEntry.lastPingAt = now;
+      onlineEntry.locale = locale;
+      onlineEntry.patchVersion = patchVersion;
+      onlineEntry.device = device;
+    }
+
+    if (recOnline.size > rec.totals.peakOnline) {
+      rec.totals.peakOnline = recOnline.size;
+      rec.totals.peakOnlineAt = now;
+    }
+    if (recOnline.size > dayBucket.peakOnline) {
+      dayBucket.peakOnline = recOnline.size;
+    }
+
+    let userRec = rec.users[deviceId];
+    if (!userRec) {
+      userRec = {
+        deviceId,
+        device,
+        os: osName,
+        locale,
+        appVersion,
+        patchVersion,
+        firstSeen: now,
+        lastSeen: now,
+        sessions: 0,
+        ip: maskIp(ip)
+      };
+      rec.users[deviceId] = userRec;
+    }
+    userRec.lastSeen = now;
+    userRec.locale = locale;
+    userRec.patchVersion = patchVersion;
+    userRec.device = device;
+    pushUnique(dayBucket.uniqueUsers, deviceId);
+
+    function pushRecEvent(type, detail) {
+      rec.recentEvents.unshift({ ts: now, type, detail });
+      if (rec.recentEvents.length > 120) rec.recentEvents.length = 120;
+    }
+
+    if (ev === 'open') {
+      rec.totals.sessions += 1;
+      userRec.sessions += 1;
+      dayBucket.sessions += 1;
+      pushRecEvent('Acesso', `${device} • ${locale} • Patch v${patchVersion}`);
+    } else if (ev === 'ota_applied') {
+      rec.totals.otaUpdates += 1;
+      dayBucket.otaUpdates += 1;
+      pushRecEvent('Patch OTA', `${device} atualizou para Patch v${patchVersion}`);
+    } else if (ev === 'telegram_click') {
+      rec.totals.telegramClicks += 1;
+      pushRecEvent('Telegram', `${device} clicou em Pedir Tradução / Canal`);
+    } else if (ev === 'lang_change') {
+      pushRecEvent('Idioma', `${device} trocou idioma para ${locale}`);
+    }
+
+    markDirty();
+    sendJson(res, 200, { ok: true, recOnline: recOnline.size });
+    return;
+  }
+
+  // 2C. Painel Web Admin dedicado do REC PT-BR (/rec-admin ou /rec)
+  if (pathname === '/rec-admin' || pathname === '/rec-admin/' || pathname === '/rec' || pathname === '/painel-rec') {
+    try {
+      const html = fs.readFileSync(REC_ADMIN_HTML_FILE, 'utf8');
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(html);
+    } catch (err) {
+      sendJson(res, 500, { error: 'rec_admin.html nao encontrado' });
+    }
+    return;
+  }
+
   // 3. Painel Web Admin (/admin ou /dashboard)
   if (pathname === '/admin' || pathname === '/admin/' || pathname === '/dashboard') {
     try {
@@ -637,6 +770,58 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === '/api/admin/stats' && req.method === 'GET') {
       sendJson(res, 200, buildAdminDashboardData());
+      return;
+    }
+
+    if (pathname === '/api/admin/rec/stats' && req.method === 'GET') {
+      if (!store.rec) store.rec = createDefaultRecStore();
+      const rec = store.rec;
+      const now = Date.now();
+      for (const [did, p] of recOnline.entries()) {
+        if (now - p.lastPingAt > REC_ONLINE_TTL_MS) recOnline.delete(did);
+      }
+      const onlineList = Array.from(recOnline.values()).sort((a, b) => b.lastPingAt - a.lastPingAt);
+      const usersArr = Object.values(rec.users);
+      const locales = {};
+      const patchVersions = {};
+      for (const u of usersArr) {
+        const loc = u.locale || 'pt_BR';
+        locales[loc] = (locales[loc] || 0) + 1;
+        const pv = String(u.patchVersion || 1);
+        patchVersions[pv] = (patchVersions[pv] || 0) + 1;
+      }
+      const daily = Object.entries(rec.daily)
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .slice(0, 30)
+        .map(([date, b]) => ({
+          date,
+          sessions: b.sessions || 0,
+          uniqueCount: (b.uniqueUsers || []).length,
+          peakOnline: b.peakOnline || 0,
+          otaUpdates: b.otaUpdates || 0
+        }));
+      const recentUsers = usersArr
+        .sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0))
+        .slice(0, 50);
+      sendJson(res, 200, {
+        onlineCount: onlineList.length,
+        onlinePlayers: onlineList,
+        totals: rec.totals,
+        uniqueUsersCount: usersArr.length,
+        locales,
+        patchVersions,
+        daily,
+        recentUsers,
+        recentEvents: (rec.recentEvents || []).slice(0, 60)
+      });
+      return;
+    }
+
+    if (pathname === '/api/admin/rec/reset' && req.method === 'POST') {
+      store.rec = createDefaultRecStore();
+      recOnline.clear();
+      saveStoreNow();
+      sendJson(res, 200, { ok: true });
       return;
     }
 
@@ -914,6 +1099,9 @@ setInterval(() => {
   }
   for (const [tok, exp] of adminSessions.entries()) {
     if (now > exp) adminSessions.delete(tok);
+  }
+  for (const [did, p] of recOnline.entries()) {
+    if (now - p.lastPingAt > REC_ONLINE_TTL_MS) recOnline.delete(did);
   }
 }, 20000);
 

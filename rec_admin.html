@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>REC PT-BR — Painel de Controle | DeveSerBug</title>
+<style>
+  :root {
+    --bg: #0c0a14;
+    --card: #161324;
+    --border: #2e2847;
+    --accent: #a855f7;
+    --gold: #ffce65;
+    --cyan: #38bdf8;
+    --green: #22c55e;
+    --red: #ef4444;
+    --text: #f3f0ff;
+    --muted: #9b93b8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 16px;
+  }
+  .container { max-width: 1120px; margin: 0 auto; }
+  .login-box {
+    max-width: 380px;
+    margin: 90px auto;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    text-align: center;
+  }
+  .login-box h1 { font-size: 22px; color: var(--gold); margin-bottom: 6px; }
+  .login-box p { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+  .login-box input {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #0f0d1a;
+    color: var(--text);
+    font-size: 15px;
+    margin-bottom: 12px;
+  }
+  .btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn-secondary { background: #26213b; border: 1px solid var(--border); }
+  .btn-danger { background: #7f1d1d; }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 20px; color: var(--gold); }
+  header .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+  .stat-value { font-size: 28px; font-weight: 800; margin-top: 6px; }
+  .stat-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .pulse {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    margin-right: 6px;
+  }
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .panel h2 { font-size: 15px; margin-bottom: 12px; color: var(--cyan); display: flex; justify-content: space-between; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #241f38; }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #272142;
+    color: var(--cyan);
+  }
+  .badge-pt { background: #14532d; color: #86efac; }
+  .badge-en { background: #1e3a8a; color: #93c5fd; }
+  .badge-ota { background: #4c1d95; color: #d8b4fe; }
+  .empty { color: var(--muted); font-size: 13px; padding: 12px 0; text-align: center; }
+  .err { color: #f87171; font-size: 13px; margin-top: 8px; }
+  .hidden { display: none !important; }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; }
+  .bar-track { flex: 1; height: 8px; background: #26213b; border-radius: 99px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--accent); border-radius: 99px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div id="loginView" class="login-box">
+    <h1>REC PT-BR • Painel</h1>
+    <p>Controle de Acessos &amp; Jogadores Online • DeveSerBug</p>
+    <input id="pwdInput" type="password" placeholder="Senha de Administrador" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn" style="width:100%;justify-content:center" onclick="doLogin()">Entrar no Painel</button>
+    <div id="loginErr" class="err"></div>
+  </div>
+
+  <div id="dashView" class="hidden">
+    <header>
+      <div>
+        <h1>REC PT-BR — Painel de Controle</h1>
+        <div class="sub">Tradutor: DeveSerBug (@hentaigamestranslated) • <span id="lastSync">Atualizando...</span></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-secondary" onclick="loadStats()">Atualizar</button>
+        <a class="btn btn-secondary" href="/admin">Painel Brasil RP</a>
+        <button class="btn btn-danger" onclick="resetRecStats()">Zerar Stats</button>
+        <button class="btn btn-secondary" onclick="doLogout()">Sair</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div class="stat-card">
+        <div class="stat-label"><span class="pulse"></span>Online Agora</div>
+        <div class="stat-value" style="color:var(--green)" id="stOnline">0</div>
+        <div class="stat-sub">Heartbeat ativo (&lt;75s)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Pico Online</div>
+        <div class="stat-value" style="color:var(--gold)" id="stPeak">0</div>
+        <div class="stat-sub" id="stPeakAt">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total de Acessos</div>
+        <div class="stat-value" id="stSessions">0</div>
+        <div class="stat-sub">Aberturas do jogo</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Jogadores Únicos</div>
+        <div class="stat-value" style="color:var(--cyan)" id="stUnique">0</div>
+        <div class="stat-sub">Dispositivos registrados</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Patches OTA</div>
+        <div class="stat-value" style="color:#d8b4fe" id="stOta">0</div>
+        <div class="stat-sub">Atualizações aplicadas</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Cliques Telegram</div>
+        <div class="stat-value" style="color:#38bdf8" id="stTg">0</div>
+        <div class="stat-sub">Pedidos / Canal</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Jogando Agora (Tempo Real) <span class="badge" id="onlineBadge">0 online</span></h2>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Dispositivo</th><th>Aparelho / OS</th><th>Idioma</th><th>Patch OTA</th><th>Online há</th><th>IP</th></tr></thead>
+          <tbody id="onlineTable"><tr><td colspan="6" class="empty">Nenhum jogador online no momento.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="panel">
+        <h2>Idiomas &amp; Patches OTA</h2>
+        <div id="distBox"></div>
+      </div>
+      <div class="panel">
+        <h2>Acessos por Dia</h2>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Data</th><th>Acessos</th><th>Únicos</th><th>Pico</th><th>OTA</th></tr></thead>
+            <tbody id="dailyTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="panel">
+        <h2>Jogadores Recentes</h2>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>ID</th><th>Aparelho</th><th>Acessos</th><th>Patch</th><th>Último Acesso</th></tr></thead>
+            <tbody id="usersTable"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Feed de Eventos ao Vivo</h2>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Hora</th><th>Evento</th><th>Detalhe</th></tr></thead>
+            <tbody id="eventsTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOKEN_KEY = 'rec_admin_token';
+let timer = null;
+
+function fmtTime(ts) {
+  if (!ts) return '-';
+  return new Date(ts).toLocaleString('pt-BR', { hour12: false });
+}
+function fmtShortTime(ts) {
+  if (!ts) return '-';
+  return new Date(ts).toLocaleTimeString('pt-BR', { hour12: false });
+}
+function fmtDur(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function doLogin() {
+  const pwd = document.getElementById('pwdInput').value.trim();
+  const err = document.getElementById('loginErr');
+  err.textContent = '';
+  try {
+    const r = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) { err.textContent = d.error || 'Senha incorreta.'; return; }
+    localStorage.setItem(TOKEN_KEY, d.token);
+    showDash();
+  } catch (e) {
+    err.textContent = 'Erro ao conectar no servidor.';
+  }
+}
+
+function doLogout() {
+  localStorage.removeItem(TOKEN_KEY);
+  if (timer) clearInterval(timer);
+  document.getElementById('dashView').classList.add('hidden');
+  document.getElementById('loginView').classList.remove('hidden');
+}
+
+function showDash() {
+  document.getElementById('loginView').classList.add('hidden');
+  document.getElementById('dashView').classList.remove('hidden');
+  loadStats();
+  if (timer) clearInterval(timer);
+  timer = setInterval(loadStats, 5000);
+}
+
+async function loadStats() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) return doLogout();
+  try {
+    const r = await fetch('/api/admin/rec/stats', { headers: { Authorization: 'Bearer ' + token } });
+    if (r.status === 401) return doLogout();
+    const d = await r.json();
+    renderStats(d);
+  } catch (e) {
+    document.getElementById('lastSync').textContent = 'Erro de conexão';
+  }
+}
+
+function renderStats(d) {
+  document.getElementById('lastSync').textContent = 'Sincronizado às ' + fmtShortTime(Date.now());
+  document.getElementById('stOnline').textContent = d.onlineCount || 0;
+  document.getElementById('onlineBadge').textContent = (d.onlineCount || 0) + ' online';
+  document.getElementById('stPeak').textContent = d.totals.peakOnline || 0;
+  document.getElementById('stPeakAt').textContent = d.totals.peakOnlineAt ? fmtTime(d.totals.peakOnlineAt) : '-';
+  document.getElementById('stSessions').textContent = d.totals.sessions || 0;
+  document.getElementById('stUnique').textContent = d.uniqueUsersCount || 0;
+  document.getElementById('stOta').textContent = d.totals.otaUpdates || 0;
+  document.getElementById('stTg').textContent = d.totals.telegramClicks || 0;
+
+  const onlineTb = document.getElementById('onlineTable');
+  if (!d.onlinePlayers || d.onlinePlayers.length === 0) {
+    onlineTb.innerHTML = '<tr><td colspan="6" class="empty">Nenhum jogador online no momento.</td></tr>';
+  } else {
+    onlineTb.innerHTML = d.onlinePlayers.map(p => `
+      <tr>
+        <td><code>${esc(p.deviceId)}</code></td>
+        <td>${esc(p.device)} (${esc(p.os)})</td>
+        <td><span class="badge ${String(p.locale).startsWith('pt') ? 'badge-pt' : 'badge-en'}">${esc(p.locale)}</span></td>
+        <td><span class="badge badge-ota">v${esc(p.patchVersion)}</span></td>
+        <td>${fmtDur((Date.now() - p.firstConnectedAt) / 1000)}</td>
+        <td>${esc(p.ip)}</td>
+      </tr>
+    `).join('');
+  }
+
+  const distBox = document.getElementById('distBox');
+  const locEntries = Object.entries(d.locales || {});
+  const patchEntries = Object.entries(d.patchVersions || {});
+  let html = '<div style="margin-bottom:12px;font-size:12px;color:var(--muted)">IDIOMAS</div>';
+  const locTotal = locEntries.reduce((a, b) => a + b[1], 0) || 1;
+  html += locEntries.length ? locEntries.map(([k, v]) => `
+    <div class="bar-row"><span style="width:70px">${esc(k)}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/locTotal*100)}%"></div></div><span>${v}</span></div>
+  `).join('') : '<div class="empty">Sem dados ainda</div>';
+  html += '<div style="margin:14px 0 10px;font-size:12px;color:var(--muted)">VERSÕES DE PATCH OTA</div>';
+  const pTotal = patchEntries.reduce((a, b) => a + b[1], 0) || 1;
+  html += patchEntries.length ? patchEntries.map(([k, v]) => `
+    <div class="bar-row"><span style="width:70px">Patch v${esc(k)}</span><div class="bar-track"><div class="bar-fill" style="background:var(--cyan);width:${Math.round(v/pTotal*100)}%"></div></div><span>${v}</span></div>
+  `).join('') : '<div class="empty">Sem dados ainda</div>';
+  distBox.innerHTML = html;
+
+  const dailyTb = document.getElementById('dailyTable');
+  const days = d.daily || [];
+  dailyTb.innerHTML = days.length ? days.map(x => `
+    <tr><td>${esc(x.date)}</td><td>${x.sessions}</td><td>${x.uniqueCount}</td><td>${x.peakOnline}</td><td>${x.otaUpdates}</td></tr>
+  `).join('') : '<tr><td colspan="5" class="empty">Sem registros diários ainda.</td></tr>';
+
+  const usersTb = document.getElementById('usersTable');
+  const users = d.recentUsers || [];
+  usersTb.innerHTML = users.length ? users.map(u => `
+    <tr><td><code>${esc(u.deviceId.slice(0, 14))}</code></td><td>${esc(u.device)}</td><td>${u.sessions}</td><td><span class="badge badge-ota">v${esc(u.patchVersion)}</span></td><td>${fmtTime(u.lastSeen)}</td></tr>
+  `).join('') : '<tr><td colspan="5" class="empty">Nenhum jogador registrado ainda.</td></tr>';
+
+  const evTb = document.getElementById('eventsTable');
+  const evs = d.recentEvents || [];
+  evTb.innerHTML = evs.length ? evs.map(e => `
+    <tr><td>${fmtShortTime(e.ts)}</td><td><span class="badge">${esc(e.type)}</span></td><td>${esc(e.detail)}</td></tr>
+  `).join('') : '<tr><td colspan="3" class="empty">Nenhum evento ainda.</td></tr>';
+}
+
+async function resetRecStats() {
+  if (!confirm('Zerar todas as estatísticas do REC PT-BR?')) return;
+  const token = localStorage.getItem(TOKEN_KEY);
+  await fetch('/api/admin/rec/reset', { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+  loadStats();
+}
+
+if (localStorage.getItem(TOKEN_KEY)) showDash();
+</script>
+</body>
+</html>
