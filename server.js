@@ -709,6 +709,8 @@ const server = http.createServer(async (req, res) => {
       pushRecEvent('Telegram', `${device} clicou em Pedir Tradução / Canal`);
     } else if (ev === 'lang_change') {
       pushRecEvent('Idioma', `${device} trocou idioma para ${locale}`);
+    } else if (ev === 'pck_ok') {
+      pushRecEvent('Runtime PCK', `${device} executou Patch v${patchVersion} (${locale}) OK!`);
     }
 
     markDirty();
