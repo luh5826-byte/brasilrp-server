@@ -997,8 +997,8 @@
           return `
           <tr>
             <td>
-              <b>${esc(p.name)}</b> <span style="color:var(--muted);font-size:11px">(${esc(p.id)})</span>
-              ${p.userKey ? `<div style="font-family:monospace;font-size:10px;color:var(--cyan)">${esc(p.userKey.slice(0, 18))}</div>` : ''}
+              <b>${esc(p.name)}</b>
+              <div style="font-family:monospace;font-size:11px;color:var(--cyan);font-weight:700">${esc(p.userKey || p.id)}</div>
             </td>
             <td>
               ${p.minimized ? '<span class="pill pill-purple">⏸️ Minimizado</span>' : (p.inCar ? '<span class="pill pill-amber">🏎️ Carro</span>' : '<span class="pill pill-cyan">🚶 A pé</span>')}
