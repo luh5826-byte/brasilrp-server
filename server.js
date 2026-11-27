@@ -34,7 +34,8 @@ function createDefaultRecStore() {
     },
     users: {},
     daily: {},
-    recentEvents: []
+    recentEvents: [],
+    latestPush: null
   };
 }
 
@@ -714,7 +715,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     markDirty();
-    sendJson(res, 200, { ok: true, recOnline: recOnline.size });
+    sendJson(res, 200, { ok: true, recOnline: recOnline.size, push: rec.latestPush || null });
     return;
   }
 
@@ -814,8 +815,39 @@ const server = http.createServer(async (req, res) => {
         patchVersions,
         daily,
         recentUsers,
-        recentEvents: (rec.recentEvents || []).slice(0, 60)
+        recentEvents: (rec.recentEvents || []).slice(0, 60),
+        latestPush: rec.latestPush || null
       });
+      return;
+    }
+
+    if (pathname === '/api/admin/rec/push' && req.method === 'POST') {
+      if (!store.rec) store.rec = createDefaultRecStore();
+      const body = await readJsonBody(req);
+      if (body.clear) {
+        store.rec.latestPush = null;
+        saveStoreNow();
+        sendJson(res, 200, { ok: true, push: null });
+        return;
+      }
+      const title = String(body.title || 'REC PT-BR • Aviso').trim().slice(0, 64);
+      const message = String(body.body || '').trim().slice(0, 240);
+      if (!message) {
+        sendJson(res, 400, { ok: false, error: 'Mensagem vazia.' });
+        return;
+      }
+      const pushObj = {
+        id: 'push_' + Date.now(),
+        title: title || 'REC PT-BR • Aviso',
+        body: message,
+        ts: Date.now()
+      };
+      store.rec.latestPush = pushObj;
+      if (!Array.isArray(store.rec.recentEvents)) store.rec.recentEvents = [];
+      store.rec.recentEvents.unshift({ ts: pushObj.ts, type: 'Push App', detail: `${pushObj.title}: ${pushObj.body}` });
+      if (store.rec.recentEvents.length > 120) store.rec.recentEvents.length = 120;
+      saveStoreNow();
+      sendJson(res, 200, { ok: true, push: pushObj });
       return;
     }
 

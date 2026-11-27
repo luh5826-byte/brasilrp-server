@@ -191,6 +191,17 @@
     </div>
 
     <div class="panel">
+      <h2>Notificação Push para o App REC <span id="pushStatusBadge" class="badge">Sem push ativo</span></h2>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+        <input id="pushTitle" type="text" maxlength="64" placeholder="Título (ex: DeveSerBug • Novidade)" style="flex:1;min-width:180px;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:#0d0b16;color:var(--text);font-size:13px">
+        <input id="pushBody" type="text" maxlength="240" placeholder="Mensagem push que aparecerá no app REC..." style="flex:2;min-width:240px;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:#0d0b16;color:var(--text);font-size:13px" onkeydown="if(event.key==='Enter')sendRecPush()">
+        <button class="btn" onclick="sendRecPush()">Enviar Push</button>
+        <button class="btn btn-secondary" onclick="clearRecPush()">Limpar</button>
+      </div>
+      <div id="pushFeedback" style="font-size:12px;color:var(--muted)"></div>
+    </div>
+
+    <div class="panel">
       <h2>Jogando Agora (Tempo Real) <span class="badge" id="onlineBadge">0 online</span></h2>
       <div style="overflow-x:auto">
         <table>
@@ -372,6 +383,44 @@ function renderStats(d) {
   evTb.innerHTML = evs.length ? evs.map(e => `
     <tr><td>${fmtShortTime(e.ts)}</td><td><span class="badge">${esc(e.type)}</span></td><td>${esc(e.detail)}</td></tr>
   `).join('') : '<tr><td colspan="3" class="empty">Nenhum evento ainda.</td></tr>';
+
+  const lp = d.latestPush;
+  const badge = document.getElementById('pushStatusBadge');
+  if (badge) {
+    badge.textContent = lp ? `Ativo: ${lp.title} (${fmtShortTime(lp.ts)})` : 'Sem push ativo';
+  }
+}
+
+async function sendRecPush() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const title = document.getElementById('pushTitle').value.trim();
+  const body = document.getElementById('pushBody').value.trim();
+  const fb = document.getElementById('pushFeedback');
+  if (!body) { fb.textContent = 'Digite a mensagem do push.'; return; }
+  const r = await fetch('/api/admin/rec/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ title: title || 'REC PT-BR • DeveSerBug', body })
+  });
+  const d = await r.json();
+  if (r.ok && d.ok) {
+    fb.textContent = 'Push enviado! Quem estiver com o app aberto (ou abrir agora) receberá em até 25s.';
+    document.getElementById('pushBody').value = '';
+    loadStats();
+  } else {
+    fb.textContent = d.error || 'Erro ao enviar push.';
+  }
+}
+
+async function clearRecPush() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  await fetch('/api/admin/rec/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ clear: true })
+  });
+  document.getElementById('pushFeedback').textContent = 'Push ativo limpo.';
+  loadStats();
 }
 
 async function resetRecStats() {
