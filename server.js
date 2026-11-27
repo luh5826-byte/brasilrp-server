@@ -385,6 +385,8 @@ function publicPlayer(p) {
   };
 }
 
+const backgroundPlayers = new Map(); // userKey -> snapshot de jogador minimizado (TTL 10 min)
+
 function adminPlayer(p) {
   return {
     id: p.id,
@@ -396,9 +398,12 @@ function adminPlayer(p) {
     speedKmh: Math.round(Math.abs(p.speed || 0) * 3.6),
     inCar: !!p.inCar,
     speaking: !!p.speaking,
+    minimized: !!p.minimized,
     connectedAt: p.connectedAt,
     sessionSec: Math.floor((Date.now() - p.connectedAt) / 1000),
     device: p.device || 'Android',
+    brand: p.brand || '',
+    model: p.model || '',
     os: p.os || 'Android',
     gpu: p.gpu || '-',
     ramGb: p.ramGb || '-',
@@ -459,7 +464,19 @@ function buildAdminDashboardData() {
   }
 
   const onlineList = [];
-  for (const p of players.values()) onlineList.push(adminPlayer(p));
+  const activeKeys = new Set();
+  for (const p of players.values()) {
+    onlineList.push(adminPlayer(p));
+    if (p.userKey) activeKeys.add(p.userKey);
+  }
+  for (const [k, bp] of backgroundPlayers.entries()) {
+    if (!activeKeys.has(k)) {
+      onlineList.push(Object.assign({}, bp, {
+        minimized: true,
+        sessionSec: Math.floor((now - (bp.connectedAt || now)) / 1000)
+      }));
+    }
+  }
 
   const usersList = Object.values(store.users)
     .sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0))
@@ -671,12 +688,13 @@ const server = http.createServer(async (req, res) => {
       v.shares += 1;
       d.shares += 1;
       logEvent('share', 'Compartilhou o site', `${uaInfo.device}`, ip);
-    } else if (event === 'game_open' || event === 'device_info') {
+    } else if (event === 'game_open' || event === 'device_info' || event === 'app_minimized' || event === 'app_resumed' || event === 'app_closed') {
+      const devId = String(body.deviceId || visitorId).slice(0, 64);
       const fakePlayer = {
-        deviceId: String(body.deviceId || visitorId).slice(0, 64),
+        deviceId: devId,
         name: String(body.playerName || 'Jogador').slice(0, 18),
-        device: String(body.device || uaInfo.device).slice(0, 32),
-        os: uaInfo.os,
+        device: String(body.device || uaInfo.device).slice(0, 48),
+        os: String(body.os || uaInfo.os).slice(0, 24),
         appVersion: String(body.appVersion || '-').slice(0, 20),
         otaVersion: String(body.otaVersion || '-').slice(0, 20),
         gpu: body.gpu,
@@ -687,7 +705,43 @@ const server = http.createServer(async (req, res) => {
         ip
       };
       upsertUserRecord(fakePlayer, false);
-      if (event === 'game_open') {
+      for (const p of players.values()) {
+        if (p.deviceId === devId || p.userKey === devId) {
+          if (body.device) p.device = fakePlayer.device;
+          if (body.os) p.os = fakePlayer.os;
+          if (body.gpu) p.gpu = String(body.gpu).slice(0, 80);
+          if (body.ramGb) p.ramGb = String(body.ramGb).slice(0, 16);
+          if (body.screen) p.screen = String(body.screen).slice(0, 32);
+          if (body.network) p.network = String(body.network).slice(0, 24);
+          if (event === 'app_minimized') p.minimized = true;
+          if (event === 'app_resumed') p.minimized = false;
+        }
+      }
+      if (event === 'app_minimized') {
+        backgroundPlayers.set(devId, {
+          id: 'bg_' + devId.slice(0, 8),
+          userKey: devId,
+          name: fakePlayer.name,
+          x: 0, y: 0, z: 0,
+          speedKmh: 0,
+          inCar: false,
+          speaking: false,
+          minimized: true,
+          connectedAt: now,
+          minimizedAt: now,
+          device: fakePlayer.device,
+          os: fakePlayer.os,
+          gpu: fakePlayer.gpu || '-',
+          ramGb: fakePlayer.ramGb || '-',
+          screen: fakePlayer.screen || '-',
+          network: fakePlayer.network || '-',
+          appVersion: fakePlayer.appVersion,
+          otaVersion: fakePlayer.otaVersion,
+          ip: maskIp(ip)
+        });
+      } else if (event === 'app_resumed' || event === 'app_closed') {
+        backgroundPlayers.delete(devId);
+      } else if (event === 'game_open') {
         logEvent('game', 'Abriu o jogo', `${fakePlayer.name} • v${fakePlayer.appVersion} (${fakePlayer.device} • ${body.network || '-'})`, ip);
       }
     }
@@ -1106,7 +1160,8 @@ wss.on('connection', (ws, req) => {
         if (clean) player.name = clean;
         if (msg.charId) player.charId = String(msg.charId).trim().slice(0, 32);
         if (msg.deviceId) player.deviceId = String(msg.deviceId).trim().slice(0, 64);
-        if (msg.device) player.device = String(msg.device).trim().slice(0, 32);
+        if (msg.device) player.device = String(msg.device).trim().slice(0, 48);
+        if (msg.os) player.os = String(msg.os).trim().slice(0, 24);
         if (msg.gpu) player.gpu = String(msg.gpu).trim().slice(0, 80);
         if (msg.ramGb) player.ramGb = String(msg.ramGb).trim().slice(0, 16);
         if (msg.cpuCores) player.cpuCores = Number(msg.cpuCores) || undefined;
@@ -1114,10 +1169,12 @@ wss.on('connection', (ws, req) => {
         if (msg.network) player.network = String(msg.network).trim().slice(0, 24);
         if (msg.appVersion) player.appVersion = String(msg.appVersion).trim().slice(0, 20);
         if (msg.otaVersion) player.otaVersion = String(msg.otaVersion).trim().slice(0, 20);
+        player.minimized = false;
 
         const isNew = !player.sessionCounted;
         player.sessionCounted = true;
         upsertUserRecord(player, isNew);
+        if (player.userKey) backgroundPlayers.delete(player.userKey);
         if (isNew) {
           logEvent('join', `${player.name} entrou`, `${player.device} • Online: ${players.size}`, ip);
         }
@@ -1126,6 +1183,27 @@ wss.on('connection', (ws, req) => {
           type: 'player_update',
           player: publicPlayer(player)
         }, id);
+        break;
+      }
+
+      case 'app_state': {
+        player.minimized = !!msg.minimized;
+        if (player.minimized && player.userKey) {
+          backgroundPlayers.set(player.userKey, Object.assign(adminPlayer(player), { minimizedAt: Date.now() }));
+        } else if (!player.minimized && player.userKey) {
+          backgroundPlayers.delete(player.userKey);
+        }
+        break;
+      }
+
+      case 'device_info': {
+        if (msg.device) player.device = String(msg.device).trim().slice(0, 48);
+        if (msg.os) player.os = String(msg.os).trim().slice(0, 24);
+        if (msg.gpu) player.gpu = String(msg.gpu).trim().slice(0, 80);
+        if (msg.ramGb) player.ramGb = String(msg.ramGb).trim().slice(0, 16);
+        if (msg.screen) player.screen = String(msg.screen).trim().slice(0, 32);
+        if (msg.network) player.network = String(msg.network).trim().slice(0, 24);
+        upsertUserRecord(player, false);
         break;
       }
 
@@ -1210,8 +1288,11 @@ wss.on('connection', (ws, req) => {
         store.users[player.userKey].totalPlaytimeSec += durSec;
       }
     }
+    if (player.minimized && player.userKey) {
+      backgroundPlayers.set(player.userKey, Object.assign(adminPlayer(player), { minimizedAt: Date.now() }));
+    }
     players.delete(id);
-    logEvent('leave', `${player.name} saiu`, `Sessao: ${durSec}s • Online: ${players.size}`, ip);
+    logEvent('leave', player.minimized ? `${player.name} minimizou` : `${player.name} saiu`, `Sessao: ${durSec}s • Online: ${players.size}`, ip);
     broadcast({
       type: 'player_leave',
       id,
@@ -1245,10 +1326,16 @@ setInterval(() => {
   const now = Date.now();
   for (const [id, p] of players.entries()) {
     if (now - p.lastSeen > 60000) {
+      if (p.minimized && p.userKey) {
+        backgroundPlayers.set(p.userKey, Object.assign(adminPlayer(p), { minimizedAt: now }));
+      }
       try { p.ws.terminate(); } catch (_) {}
       players.delete(id);
       broadcast({ type: 'player_leave', id, onlineCount: players.size });
     }
+  }
+  for (const [k, bp] of backgroundPlayers.entries()) {
+    if (now - (bp.minimizedAt || 0) > 600000) backgroundPlayers.delete(k);
   }
   for (const [tok, exp] of adminSessions.entries()) {
     if (now > exp) adminSessions.delete(tok);

@@ -1001,8 +1001,8 @@
               ${p.userKey ? `<div style="font-family:monospace;font-size:10px;color:var(--cyan)">${esc(p.userKey.slice(0, 18))}</div>` : ''}
             </td>
             <td>
-              ${p.inCar ? '<span class="pill pill-amber">🏎️ Carro</span>' : '<span class="pill pill-cyan">🚶 A pé</span>'}
-              ${p.speaking ? '<span class="pill pill-green">🔊 Mic</span>' : ''}
+              ${p.minimized ? '<span class="pill pill-purple">⏸️ Minimizado</span>' : (p.inCar ? '<span class="pill pill-amber">🏎️ Carro</span>' : '<span class="pill pill-cyan">🚶 A pé</span>')}
+              ${!p.minimized && p.speaking ? '<span class="pill pill-green">🔊 Mic</span>' : ''}
             </td>
             <td>${p.speedKmh} km/h</td>
             <td>${fmtDur(p.sessionSec)}</td>
