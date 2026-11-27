@@ -382,6 +382,7 @@ function publicPlayer(p) {
     rotY: p.rotY,
     speed: p.speed,
     inCar: p.inCar,
+    seatId: p.seatId || 'driver',
     speaking: p.speaking
   };
 }
@@ -1265,6 +1266,7 @@ wss.on('connection', (ws, req) => {
           }
         }
         player.inCar = !!msg.inCar;
+        if (typeof msg.seatId === 'string') player.seatId = msg.seatId.slice(0, 16);
         player.speaking = !!msg.speaking;
         break;
       }
