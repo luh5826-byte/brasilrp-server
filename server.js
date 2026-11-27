@@ -400,6 +400,10 @@ function adminPlayer(p) {
     sessionSec: Math.floor((Date.now() - p.connectedAt) / 1000),
     device: p.device || 'Android',
     os: p.os || 'Android',
+    gpu: p.gpu || '-',
+    ramGb: p.ramGb || '-',
+    screen: p.screen || '-',
+    network: p.network || '-',
     appVersion: p.appVersion || '-',
     otaVersion: p.otaVersion || '-',
     ip: maskIp(p.ip)
@@ -667,7 +671,7 @@ const server = http.createServer(async (req, res) => {
       v.shares += 1;
       d.shares += 1;
       logEvent('share', 'Compartilhou o site', `${uaInfo.device}`, ip);
-    } else if (event === 'game_open') {
+    } else if (event === 'game_open' || event === 'device_info') {
       const fakePlayer = {
         deviceId: String(body.deviceId || visitorId).slice(0, 64),
         name: String(body.playerName || 'Jogador').slice(0, 18),
@@ -683,7 +687,9 @@ const server = http.createServer(async (req, res) => {
         ip
       };
       upsertUserRecord(fakePlayer, false);
-      logEvent('game', 'Abriu o jogo', `${fakePlayer.name} • v${fakePlayer.appVersion} (${fakePlayer.device}${body.gpu ? ' • ' + String(body.gpu).slice(0, 28) : ''})`, ip);
+      if (event === 'game_open') {
+        logEvent('game', 'Abriu o jogo', `${fakePlayer.name} • v${fakePlayer.appVersion} (${fakePlayer.device} • ${body.network || '-'})`, ip);
+      }
     }
 
     markDirty();
@@ -1101,6 +1107,11 @@ wss.on('connection', (ws, req) => {
         if (msg.charId) player.charId = String(msg.charId).trim().slice(0, 32);
         if (msg.deviceId) player.deviceId = String(msg.deviceId).trim().slice(0, 64);
         if (msg.device) player.device = String(msg.device).trim().slice(0, 32);
+        if (msg.gpu) player.gpu = String(msg.gpu).trim().slice(0, 80);
+        if (msg.ramGb) player.ramGb = String(msg.ramGb).trim().slice(0, 16);
+        if (msg.cpuCores) player.cpuCores = Number(msg.cpuCores) || undefined;
+        if (msg.screen) player.screen = String(msg.screen).trim().slice(0, 32);
+        if (msg.network) player.network = String(msg.network).trim().slice(0, 24);
         if (msg.appVersion) player.appVersion = String(msg.appVersion).trim().slice(0, 20);
         if (msg.otaVersion) player.otaVersion = String(msg.otaVersion).trim().slice(0, 20);
 

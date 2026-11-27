@@ -915,12 +915,15 @@
             (u.name || '').toLowerCase().includes(q) ||
             (u.lastDevice || '').toLowerCase().includes(q) ||
             (u.key || '').toLowerCase().includes(q) ||
-            (u.gpu || '').toLowerCase().includes(q)
+            (u.gpu || '').toLowerCase().includes(q) ||
+            (u.network || '').toLowerCase().includes(q)
           )
         : users;
       $('usersTbody').innerHTML = filtered.length
         ? filtered.map((u) => {
           const hw = [u.gpu, u.ramGb && u.ramGb !== '-' ? u.ramGb + ' RAM' : '', u.screen].filter(Boolean).join(' • ');
+          const net = u.network && u.network !== '-' ? u.network : '';
+          const netIcon = net.toLowerCase().includes('wi-fi') ? '📶' : (net.toLowerCase().includes('dados') ? '📱' : '🌐');
           return `
           <tr>
             <td>
@@ -935,6 +938,7 @@
             <td>
               <div>${esc(u.lastDevice || '-')} <span style="color:var(--muted);font-size:11px">(${esc(u.lastOs || '-')})</span></div>
               ${hw ? `<div style="font-size:11px;color:var(--muted)">${esc(hw)}</div>` : ''}
+              ${net ? `<div style="font-size:11px;color:var(--green)">${netIcon} ${esc(net)}</div>` : ''}
             </td>
             <td style="color:var(--muted)">${fmtTime(u.lastSeen)}</td>
           </tr>`;
@@ -986,18 +990,29 @@
       $('onlineCapacity').textContent = `${s.playersOnline} / ${srv.maxPlayers}`;
       const online = d.onlinePlayers || [];
       $('onlineTbody').innerHTML = online.length
-        ? online.map((p) => `
+        ? online.map((p) => {
+          const net = p.network && p.network !== '-' ? p.network : '';
+          const netIcon = net.toLowerCase().includes('wi-fi') ? '📶' : (net.toLowerCase().includes('dados') ? '📱' : '🌐');
+          const hw = [p.gpu !== '-' ? p.gpu : '', p.ramGb !== '-' ? p.ramGb + ' RAM' : '', p.screen !== '-' ? p.screen : ''].filter(Boolean).join(' • ');
+          return `
           <tr>
-            <td><b>${esc(p.name)}</b> <span style="color:var(--muted);font-size:11px">(${esc(p.id)})</span></td>
+            <td>
+              <b>${esc(p.name)}</b> <span style="color:var(--muted);font-size:11px">(${esc(p.id)})</span>
+              ${p.userKey ? `<div style="font-family:monospace;font-size:10px;color:var(--cyan)">${esc(p.userKey.slice(0, 18))}</div>` : ''}
+            </td>
             <td>
               ${p.inCar ? '<span class="pill pill-amber">🏎️ Carro</span>' : '<span class="pill pill-cyan">🚶 A pé</span>'}
               ${p.speaking ? '<span class="pill pill-green">🔊 Mic</span>' : ''}
             </td>
             <td>${p.speedKmh} km/h</td>
             <td>${fmtDur(p.sessionSec)}</td>
-            <td>${esc(p.device)}</td>
+            <td>
+              <div>${esc(p.device)} ${net ? `<span style="color:var(--green);font-size:11px">• ${netIcon} ${esc(net)}</span>` : ''}</div>
+              ${hw ? `<div style="font-size:11px;color:var(--muted)">${esc(hw)}</div>` : ''}
+            </td>
             <td><button class="btn btn-danger btn-sm" onclick="kickPlayer('${esc(p.id)}','${esc(p.name)}')">Kick</button></td>
-          </tr>`).join('')
+          </tr>`;
+        }).join('')
         : '<tr><td colspan="6" style="color:var(--muted);text-align:center;">Nenhum jogador online no momento.</td></tr>';
       drawRadar(online);
 
