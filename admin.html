@@ -413,6 +413,22 @@
         <div class="card">
           <div class="card-head">
             <div>
+              <div class="card-title">🔔 Notificação Push no Jogo <span id="pushStatusPill" class="pill pill-cyan" style="margin-left:6px">Sem push ativo</span></div>
+              <div class="card-sub">Exibe banner em destaque na tela de quem está jogando agora e de quem abrir o jogo depois</div>
+            </div>
+          </div>
+          <div class="announce-row" style="margin-bottom:6px">
+            <input id="pushTitleInput" class="input" type="text" maxlength="64" placeholder="Título (ex: Brasil RP • Novidade)" style="max-width:260px" />
+            <input id="pushBodyInput" class="input" type="text" maxlength="240" placeholder="Mensagem push que aparecerá em destaque no jogo..." />
+            <button id="btnSendPush" class="btn btn-primary">Enviar Push</button>
+            <button id="btnClearPush" class="btn btn-ghost">Limpar</button>
+          </div>
+          <div id="pushFeedback" style="font-size:12px;color:var(--muted)"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
               <div class="card-title">📢 Enviar Aviso Global no Jogo</div>
               <div class="card-sub">Aparece imediatamente no chat de todos os jogadores online</div>
             </div>
@@ -715,6 +731,41 @@
       } catch (_) {}
     });
 
+    async function sendGamePush() {
+      const title = $('pushTitleInput').value.trim();
+      const body = $('pushBodyInput').value.trim();
+      const fb = $('pushFeedback');
+      if (!body) {
+        fb.textContent = 'Digite a mensagem da notificação push.';
+        return;
+      }
+      try {
+        const r = await api('/api/admin/push', {
+          method: 'POST',
+          body: JSON.stringify({ title: title || 'Brasil RP • Novidade', body })
+        });
+        if (r.ok) {
+          $('pushBodyInput').value = '';
+          fb.textContent = `Push enviado! ${r.sentTo} jogador(es) online receberam agora e novos acessos também receberão.`;
+          showToast(`Push enviado (${r.sentTo} online)!`);
+          fetchStats();
+        }
+      } catch (_) {}
+    }
+
+    $('btnSendPush').addEventListener('click', sendGamePush);
+    $('pushBodyInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendGamePush(); });
+    $('btnClearPush').addEventListener('click', async () => {
+      try {
+        const r = await api('/api/admin/push', { method: 'POST', body: JSON.stringify({ clear: true }) });
+        if (r.ok) {
+          $('pushFeedback').textContent = 'Push ativo removido.';
+          showToast('Push removido.');
+          fetchStats();
+        }
+      } catch (_) {}
+    });
+
     $('btnResetStats').addEventListener('click', async () => {
       if (!confirm('Tem certeza que deseja zerar todas as estatísticas e histórico?')) return;
       try {
@@ -862,6 +913,18 @@
       $('kSharesSub').textContent = `Compartilhamentos: ${s.totalShares}`;
       $('kUptime').textContent = fmtDur(srv.uptimeSec);
       $('kMem').textContent = `RAM: ${srv.memoryMb} MB • Cap: ${srv.maxPlayers}`;
+
+      const pushPill = $('pushStatusPill');
+      if (pushPill) {
+        if (d.latestPush && d.latestPush.title) {
+          const dt = new Date(d.latestPush.ts || Date.now()).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          pushPill.textContent = `Ativo: ${d.latestPush.title} (${dt})`;
+          pushPill.className = 'pill pill-green';
+        } else {
+          pushPill.textContent = 'Sem push ativo';
+          pushPill.className = 'pill pill-cyan';
+        }
+      }
 
       renderBarChart('hourlyChart', d.hourlySeries || [], 'hour');
       renderBarChart('dailyChart', d.dailySeries || [], 'day');

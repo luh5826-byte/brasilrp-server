@@ -60,6 +60,7 @@ function createDefaultStore() {
     devices: {},        // OS -> count
     recentChats: [],    // [{ ts, from, name, text, scope }]
     recentEvents: [],   // [{ ts, type, label, detail, ip }]
+    latestPush: null,   // { id, title, body, ts }
     rec: createDefaultRecStore()
   };
 }
@@ -496,7 +497,8 @@ function buildAdminDashboardData() {
     referrers: store.referrers,
     devices: store.devices,
     recentChats: store.recentChats.slice(0, 60),
-    recentEvents: store.recentEvents.slice(0, 80)
+    recentEvents: store.recentEvents.slice(0, 80),
+    latestPush: store.latestPush || null
   };
 }
 
@@ -536,6 +538,12 @@ const server = http.createServer(async (req, res) => {
       totalDownloads: store.totals.downloadClicks,
       uptimeSec: Math.floor(process.uptime())
     });
+    return;
+  }
+
+  // 1B. Endpoint leve de Push para o jogo Brasil RP (fallback HTTP)
+  if (pathname === '/api/push' && req.method === 'GET') {
+    sendJson(res, 200, { ok: true, push: store.latestPush || null });
     return;
   }
 
@@ -859,6 +867,32 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (pathname === '/api/admin/push' && req.method === 'POST') {
+      const body = await readJsonBody(req);
+      if (body.clear) {
+        store.latestPush = null;
+        saveStoreNow();
+        logEvent('admin', 'Push limpo', 'Notificação push removida pelo painel', getClientIp(req));
+        sendJson(res, 200, { ok: true, push: null, sentTo: 0 });
+        return;
+      }
+      const title = String(body.title || 'Brasil RP • Novidade').trim().slice(0, 64) || 'Brasil RP • Novidade';
+      const msgBody = String(body.body || '').trim().slice(0, 240);
+      if (!msgBody) return sendJson(res, 400, { ok: false, error: 'Mensagem push vazia.' });
+      const pushObj = {
+        id: 'push_' + Date.now(),
+        title,
+        body: msgBody,
+        ts: Date.now()
+      };
+      store.latestPush = pushObj;
+      saveStoreNow();
+      broadcast({ type: 'push', push: pushObj });
+      logEvent('admin', 'Push enviado', `${pushObj.title}: ${pushObj.body}`, getClientIp(req));
+      sendJson(res, 200, { ok: true, push: pushObj, sentTo: players.size });
+      return;
+    }
+
     if (pathname === '/api/admin/announce' && req.method === 'POST') {
       const body = await readJsonBody(req);
       const text = String(body.text || '').trim().slice(0, 180);
@@ -967,7 +1001,8 @@ wss.on('connection', (ws, req) => {
     type: 'welcome',
     id,
     players: others,
-    onlineCount: players.size
+    onlineCount: players.size,
+    latestPush: store.latestPush || null
   });
 
   broadcast({
