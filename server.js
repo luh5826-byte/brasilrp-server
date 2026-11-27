@@ -61,6 +61,7 @@ function createDefaultStore() {
     recentChats: [],    // [{ ts, from, name, text, scope }]
     recentEvents: [],   // [{ ts, type, label, detail, ip }]
     crashReports: [],   // [{ ts, deviceId, playerName, appVersion, device, os, gpu, ramGb, cpuCores, screen, network, cause, reason, stack, context }]
+    deviceSignatures: {}, // sigHash -> BRP-XXXXXX
     latestPush: null,   // { id, title, body, ts }
     rec: createDefaultRecStore()
   };
@@ -572,6 +573,47 @@ const server = http.createServer(async (req, res) => {
   // 1B. Endpoint leve de Push para o jogo Brasil RP (fallback HTTP)
   if (pathname === '/api/push' && req.method === 'GET') {
     sendJson(res, 200, { ok: true, push: store.latestPush || null });
+    return;
+  }
+
+  // 1B-2. Registro e recuperacao de ID proprio (BRP-XXXXXX) no servidor
+  if (pathname === '/api/device/identify' && req.method === 'POST') {
+    const body = await readJsonBody(req);
+    const ip = getClientIp(req);
+    if (!store.deviceSignatures || typeof store.deviceSignatures !== 'object') {
+      store.deviceSignatures = {};
+    }
+    const gpu = String(body.gpu || '').trim().slice(0, 80);
+    const screen = String(body.screen || '').trim().slice(0, 32);
+    const cpuCores = String(body.cpuCores || '').trim().slice(0, 8);
+    const ramGb = String(body.ramGb || '').trim().slice(0, 16);
+    const hwRaw = `${gpu}|${screen}|${cpuCores}|${ramGb}`;
+    const hwSig = crypto.createHash('sha1').update(hwRaw).digest('hex').slice(0, 20);
+    const hwIpSig = crypto.createHash('sha1').update(`${hwRaw}|${ip}`).digest('hex').slice(0, 20);
+
+    const cur = String(body.currentId || '').trim().toUpperCase();
+    if (/^BRP-[A-Z0-9]{6}$/.test(cur)) {
+      store.deviceSignatures[hwIpSig] = cur;
+      if (!store.deviceSignatures[hwSig]) store.deviceSignatures[hwSig] = cur;
+      markDirty();
+      sendJson(res, 200, { ok: true, userId: cur, restored: false });
+      return;
+    }
+
+    let resolved = store.deviceSignatures[hwIpSig] || store.deviceSignatures[hwSig] || '';
+    let restored = !!resolved;
+    if (!resolved) {
+      const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+      do {
+        let code = '';
+        for (let i = 0; i < 6; i++) code += alphabet[crypto.randomInt(0, alphabet.length)];
+        resolved = 'BRP-' + code;
+      } while (store.users && store.users[resolved]);
+      store.deviceSignatures[hwIpSig] = resolved;
+      store.deviceSignatures[hwSig] = resolved;
+      markDirty();
+    }
+    sendJson(res, 200, { ok: true, userId: resolved, restored });
     return;
   }
 
