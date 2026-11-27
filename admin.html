@@ -372,6 +372,7 @@
         <button class="tab-btn" data-tab="online">🟢 Online Agora (<span id="tabOnlineCnt">0</span>)</button>
         <button class="tab-btn" data-tab="users">👥 Usuários (<span id="tabUsersCnt">0</span>)</button>
         <button class="tab-btn" data-tab="web">🌐 Acessos Web</button>
+        <button class="tab-btn" data-tab="crashes">🐛 Travamentos (<span id="tabCrashesCnt">0</span>)</button>
         <button class="tab-btn" data-tab="logs">💬 Chat &amp; Logs</button>
       </nav>
 
@@ -575,7 +576,34 @@
         </div>
       </section>
 
-      <!-- TAB 5: CHAT & LOGS -->
+      <!-- TAB 5: TRAVAMENTOS & DISPOSITIVOS -->
+      <section id="tab-crashes" class="tab-panel hidden">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">🐛 Relatórios Automáticos de Travamento &amp; Crash</div>
+              <div class="card-sub">Logs enviados automaticamente pelo jogo com ID do dispositivo, hardware e justificativa da causa</div>
+            </div>
+            <button class="btn btn-danger btn-sm" id="btnClearCrashes">Limpar Logs</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data/Hora</th>
+                  <th>Jogador &amp; ID Dispositivo</th>
+                  <th>Hardware (Aparelho / GPU / RAM)</th>
+                  <th>Versão</th>
+                  <th>Causa &amp; Justificativa</th>
+                </tr>
+              </thead>
+              <tbody id="crashesTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 6: CHAT & LOGS -->
       <section id="tab-logs" class="tab-panel hidden">
         <div class="grid-2">
           <div class="card" style="margin-bottom:0">
@@ -775,6 +803,15 @@
       } catch (_) {}
     });
 
+    $('btnClearCrashes').addEventListener('click', async () => {
+      if (!confirm('Limpar todos os relatórios de travamento?')) return;
+      try {
+        await api('/api/admin/crashes/clear', { method: 'POST' });
+        showToast('Logs de travamento limpos.');
+        fetchStats();
+      } catch (_) {}
+    });
+
     $('userSearch').addEventListener('input', () => {
       if (lastData) renderUsers(lastData.users || []);
     });
@@ -874,20 +911,34 @@
     function renderUsers(users) {
       const q = ($('userSearch').value || '').trim().toLowerCase();
       const filtered = q
-        ? users.filter((u) => (u.name || '').toLowerCase().includes(q) || (u.lastDevice || '').toLowerCase().includes(q))
+        ? users.filter((u) =>
+            (u.name || '').toLowerCase().includes(q) ||
+            (u.lastDevice || '').toLowerCase().includes(q) ||
+            (u.key || '').toLowerCase().includes(q) ||
+            (u.gpu || '').toLowerCase().includes(q)
+          )
         : users;
       $('usersTbody').innerHTML = filtered.length
-        ? filtered.map((u) => `
+        ? filtered.map((u) => {
+          const hw = [u.gpu, u.ramGb && u.ramGb !== '-' ? u.ramGb + ' RAM' : '', u.screen].filter(Boolean).join(' • ');
+          return `
           <tr>
-            <td><b>${esc(u.name)}</b></td>
+            <td>
+              <b>${esc(u.name)}</b>
+              <div style="font-family:monospace;font-size:11px;color:var(--cyan)">${esc((u.key || '').slice(0, 18))}</div>
+            </td>
             <td>${u.sessions || 0}</td>
             <td>${fmtDur(u.totalPlaytimeSec)}</td>
             <td>${u.maxSpeed || 0} km/h</td>
             <td>${u.messagesSent || 0}</td>
             <td><span class="pill pill-cyan">${esc(u.lastVersion || '-')} / OTA ${esc(u.lastOta || '-')}</span></td>
-            <td>${esc(u.lastDevice || '-')}</td>
+            <td>
+              <div>${esc(u.lastDevice || '-')} <span style="color:var(--muted);font-size:11px">(${esc(u.lastOs || '-')})</span></div>
+              ${hw ? `<div style="font-size:11px;color:var(--muted)">${esc(hw)}</div>` : ''}
+            </td>
             <td style="color:var(--muted)">${fmtTime(u.lastSeen)}</td>
-          </tr>`).join('')
+          </tr>`;
+        }).join('')
         : '<tr><td colspan="8" style="color:var(--muted);text-align:center;">Nenhum jogador registrado ainda.</td></tr>';
     }
 
@@ -979,9 +1030,33 @@
           </div>`).join('')
         : '<div style="color:var(--muted);font-size:13px;">Nenhuma mensagem no chat ainda.</div>';
 
+      // Crashes
+      const crashes = d.crashReports || [];
+      $('tabCrashesCnt').textContent = crashes.length;
+      $('crashesTbody').innerHTML = crashes.length
+        ? crashes.map((cr) => `
+          <tr>
+            <td style="color:var(--muted);white-space:nowrap">${fmtTime(cr.ts)}</td>
+            <td>
+              <b>${esc(cr.playerName)}</b>
+              <div style="font-family:monospace;font-size:11px;color:var(--cyan)">${esc((cr.deviceId || '-').slice(0, 22))}</div>
+            </td>
+            <td>
+              <div>${esc(cr.device)} <span style="color:var(--muted)">(${esc(cr.os)})</span></div>
+              <div style="font-size:11px;color:var(--muted)">GPU: ${esc(cr.gpu)} • RAM: ${esc(cr.ramGb)} • ${esc(cr.screen)}</div>
+            </td>
+            <td><span class="pill pill-amber">${esc(cr.appVersion || '-')}</span></td>
+            <td>
+              <div style="font-weight:700;color:#fca5a5">${esc(cr.cause)}</div>
+              <div style="font-size:12px;color:var(--text);margin-top:2px">${esc(cr.reason)}</div>
+              ${cr.stack ? `<details style="margin-top:4px;font-size:11px;color:var(--muted)"><summary style="cursor:pointer">Stack trace</summary><pre style="white-space:pre-wrap;margin:4px 0 0">${esc(cr.stack)}</pre></details>` : ''}
+            </td>
+          </tr>`).join('')
+        : '<tr><td colspan="5" style="color:var(--muted);text-align:center;">Nenhum travamento registrado até o momento.</td></tr>';
+
       // Events
       const events = d.recentEvents || [];
-      const iconMap = { web: '🌐', download: '📥', share: '📤', join: '🟢', leave: '🔴', game: '🎮', admin: '🛡️' };
+      const iconMap = { web: '🌐', download: '📥', share: '📤', join: '🟢', leave: '🔴', game: '🎮', admin: '🛡️', crash: '🐛' };
       $('eventsFeed').innerHTML = events.length
         ? events.map((ev) => `
           <div class="feed-item">

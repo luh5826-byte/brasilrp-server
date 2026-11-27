@@ -60,6 +60,7 @@ function createDefaultStore() {
     devices: {},        // OS -> count
     recentChats: [],    // [{ ts, from, name, text, scope }]
     recentEvents: [],   // [{ ts, type, label, detail, ip }]
+    crashReports: [],   // [{ ts, deviceId, playerName, appVersion, device, os, gpu, ramGb, cpuCores, screen, network, cause, reason, stack, context }]
     latestPush: null,   // { id, title, body, ts }
     rec: createDefaultRecStore()
   };
@@ -284,6 +285,11 @@ function upsertUserRecord(player, isNewSession = false) {
   if (player.os) u.lastOs = player.os;
   if (player.appVersion) u.lastVersion = player.appVersion;
   if (player.otaVersion) u.lastOta = player.otaVersion;
+  if (player.gpu) u.gpu = String(player.gpu).slice(0, 80);
+  if (player.ramGb) u.ramGb = String(player.ramGb).slice(0, 16);
+  if (player.cpuCores) u.cpuCores = Number(player.cpuCores) || u.cpuCores;
+  if (player.screen) u.screen = String(player.screen).slice(0, 32);
+  if (player.network) u.network = String(player.network).slice(0, 24);
   if (player.ip) u.lastIp = maskIp(player.ip);
   if (isNewSession) {
     u.sessions += 1;
@@ -498,6 +504,7 @@ function buildAdminDashboardData() {
     devices: store.devices,
     recentChats: store.recentChats.slice(0, 60),
     recentEvents: store.recentEvents.slice(0, 80),
+    crashReports: (store.crashReports || []).slice(0, 100),
     latestPush: store.latestPush || null
   };
 }
@@ -544,6 +551,59 @@ const server = http.createServer(async (req, res) => {
   // 1B. Endpoint leve de Push para o jogo Brasil RP (fallback HTTP)
   if (pathname === '/api/push' && req.method === 'GET') {
     sendJson(res, 200, { ok: true, push: store.latestPush || null });
+    return;
+  }
+
+  // 1C. Relatorio automatico de travamento / crash do jogo
+  if (pathname === '/api/crash-report' && req.method === 'POST') {
+    const body = await readJsonBody(req, 65536);
+    const ip = getClientIp(req);
+    const uaInfo = parseUserAgent(body.userAgent || req.headers['user-agent'] || '');
+    const deviceId = String(body.deviceId || '').trim().slice(0, 64) || 'desconhecido';
+    const playerName = String(body.playerName || 'Jogador').trim().slice(0, 24) || 'Jogador';
+    const appVersion = String(body.appVersion || '-').trim().slice(0, 32);
+    const cause = String(body.cause || 'Travamento desconhecido').trim().slice(0, 140);
+    const reason = String(body.reason || 'Sem diagnóstico adicional').trim().slice(0, 500);
+    const stack = String(body.stack || '').trim().slice(0, 1500);
+    const context = body.context && typeof body.context === 'object' ? body.context : {};
+    const report = {
+      id: 'cr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      ts: Date.now(),
+      deviceId,
+      playerName,
+      appVersion,
+      device: String(body.device || uaInfo.device).slice(0, 48),
+      os: String(body.os || uaInfo.os).slice(0, 24),
+      gpu: String(body.gpu || '-').slice(0, 80),
+      ramGb: String(body.ramGb || '-').slice(0, 16),
+      cpuCores: body.cpuCores ? Number(body.cpuCores) : null,
+      screen: String(body.screen || '-').slice(0, 32),
+      network: String(body.network || '-').slice(0, 24),
+      ip: maskIp(ip),
+      cause,
+      reason,
+      stack,
+      context
+    };
+    if (!Array.isArray(store.crashReports)) store.crashReports = [];
+    store.crashReports.unshift(report);
+    if (store.crashReports.length > 150) store.crashReports.length = 150;
+    upsertUserRecord({
+      deviceId,
+      name: playerName,
+      device: report.device,
+      os: report.os,
+      appVersion,
+      gpu: report.gpu,
+      ramGb: report.ramGb,
+      cpuCores: report.cpuCores,
+      screen: report.screen,
+      network: report.network,
+      ip
+    }, false);
+    logEvent('crash', cause, `${playerName} (${report.device} • ${appVersion}) — ${reason}`, ip);
+    saveStoreNow();
+    sendJson(res, 200, { ok: true, id: report.id });
     return;
   }
 
@@ -615,10 +675,15 @@ const server = http.createServer(async (req, res) => {
         os: uaInfo.os,
         appVersion: String(body.appVersion || '-').slice(0, 20),
         otaVersion: String(body.otaVersion || '-').slice(0, 20),
+        gpu: body.gpu,
+        ramGb: body.ramGb,
+        cpuCores: body.cpuCores,
+        screen: body.screen,
+        network: body.network,
         ip
       };
       upsertUserRecord(fakePlayer, false);
-      logEvent('game', 'Abriu o jogo', `${fakePlayer.name} • v${fakePlayer.appVersion} (OTA ${fakePlayer.otaVersion})`, ip);
+      logEvent('game', 'Abriu o jogo', `${fakePlayer.name} • v${fakePlayer.appVersion} (${fakePlayer.device}${body.gpu ? ' • ' + String(body.gpu).slice(0, 28) : ''})`, ip);
     }
 
     markDirty();
@@ -942,6 +1007,14 @@ const server = http.createServer(async (req, res) => {
       store = createDefaultStore();
       saveStoreNow();
       logEvent('admin', 'Estatisticas zeradas', 'Reset manual pelo painel', getClientIp(req));
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (pathname === '/api/admin/crashes/clear' && req.method === 'POST') {
+      store.crashReports = [];
+      saveStoreNow();
+      logEvent('admin', 'Logs de crash limpos', 'Relatórios de travamento limpos pelo painel', getClientIp(req));
       sendJson(res, 200, { ok: true });
       return;
     }
