@@ -150,8 +150,8 @@
         <div class="sub">Tradutor: DeveSerBug (@hentaigamestranslated) • <span id="lastSync">Atualizando...</span></div>
       </div>
       <div class="actions">
+        <a class="btn" style="text-decoration:none" href="/admin">🇧🇷 Brasil RP</a>
         <button class="btn btn-secondary" onclick="loadStats()">Atualizar</button>
-        <a class="btn btn-secondary" href="/admin">Painel Brasil RP</a>
         <button class="btn btn-danger" onclick="resetRecStats()">Zerar Stats</button>
         <button class="btn btn-secondary" onclick="doLogout()">Sair</button>
       </div>
@@ -241,6 +241,10 @@
 
 <script>
 const TOKEN_KEY = 'rec_admin_token';
+const SHARED_TOKEN_KEY = 'brasilrp_admin_token';
+if (!localStorage.getItem(TOKEN_KEY) && localStorage.getItem(SHARED_TOKEN_KEY)) {
+  localStorage.setItem(TOKEN_KEY, localStorage.getItem(SHARED_TOKEN_KEY));
+}
 let timer = null;
 
 function fmtTime(ts) {
@@ -273,6 +277,7 @@ async function doLogin() {
     const d = await r.json();
     if (!r.ok || !d.ok) { err.textContent = d.error || 'Senha incorreta.'; return; }
     localStorage.setItem(TOKEN_KEY, d.token);
+    localStorage.setItem(SHARED_TOKEN_KEY, d.token);
     showDash();
   } catch (e) {
     err.textContent = 'Erro ao conectar no servidor.';
@@ -281,6 +286,7 @@ async function doLogin() {
 
 function doLogout() {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(SHARED_TOKEN_KEY);
   if (timer) clearInterval(timer);
   document.getElementById('dashView').classList.add('hidden');
   document.getElementById('loginView').classList.remove('hidden');

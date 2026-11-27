@@ -358,6 +358,7 @@
         </div>
       </div>
       <div class="top-actions">
+        <a class="btn btn-sm" style="background:rgba(168,85,247,0.22);color:#e9d5ff;border:1px solid rgba(168,85,247,0.5);text-decoration:none" href="/rec-admin">🎮 REC PT-BR</a>
         <button class="btn btn-secondary btn-sm" id="btnToggleAuto">⏸ Pausar Auto</button>
         <button class="btn btn-secondary btn-sm" id="btnRefresh">🔄 Atualizar</button>
         <button class="btn btn-secondary btn-sm" id="btnExport">📥 Exportar JSON</button>
@@ -581,7 +582,9 @@
 
   <script>
     const TOKEN_KEY = 'brasilrp_admin_token';
-    let token = localStorage.getItem(TOKEN_KEY) || '';
+    const SHARED_TOKEN_KEY = 'rec_admin_token';
+    let token = localStorage.getItem(TOKEN_KEY) || localStorage.getItem(SHARED_TOKEN_KEY) || '';
+    if (token) localStorage.setItem(TOKEN_KEY, token);
     let autoRefresh = true;
     let timer = null;
     let lastData = null;
@@ -632,6 +635,7 @@
     function logoutLocal() {
       token = '';
       localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(SHARED_TOKEN_KEY);
       clearInterval(timer);
       $('appView').classList.add('hidden');
       $('loginView').classList.remove('hidden');
@@ -654,6 +658,7 @@
         }
         token = data.token;
         localStorage.setItem(TOKEN_KEY, token);
+        localStorage.setItem(SHARED_TOKEN_KEY, token);
         $('pwdInput').value = '';
         enterApp();
       } catch (err) {
